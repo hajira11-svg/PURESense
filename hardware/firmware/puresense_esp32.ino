@@ -1,46 +1,237 @@
-// PURESense
-// ESP32 Sensor Data Acquisition
-//
-// Prototype firmware for reading:
-// 1. Optical sensor
-// 2. Electrical sensor
-// 3. Temperature sensor
+/*
+   ============================================================
+   PURESense ESP32 Firmware
+   ============================================================
+
+   Reads three analog channels:
+
+   Optical sensor
+   Electrical sensor
+   Temperature/analog sensor
+
+   Sends readings through Serial.
+
+   IMPORTANT:
+   The pin numbers below are example ADC pins.
+   Change them to match your actual circuit.
+*/
+
+
+// ============================================================
+// SENSOR PINS
+// ============================================================
 
 const int OPTICAL_PIN = 34;
+
 const int ELECTRICAL_PIN = 35;
-const int TEMPERATURE_PIN = 4;
 
-void setup() {
-  Serial.begin(115200);
+const int TEMPERATURE_PIN = 32;
 
-  pinMode(OPTICAL_PIN, INPUT);
-  pinMode(ELECTRICAL_PIN, INPUT);
 
-  Serial.println("PURESense Sensor System");
-  Serial.println("-----------------------");
-  Serial.println("Starting sensor acquisition...");
+// ============================================================
+// SETUP
+// ============================================================
+
+void setup()
+{
+
+    Serial.begin(115200);
+
+    delay(1000);
+
+
+    Serial.println();
+
+    Serial.println(
+        "================================"
+    );
+
+    Serial.println(
+        "PURESense ESP32"
+    );
+
+    Serial.println(
+        "Multisensor Acquisition System"
+    );
+
+    Serial.println(
+        "================================"
+    );
+
 }
 
-void loop() {
 
-  // Read analog sensors
-  int optical = analogRead(OPTICAL_PIN);
-  int electrical = analogRead(ELECTRICAL_PIN);
+// ============================================================
+// READ SENSOR
+// ============================================================
 
-  // Temperature sensor reading
-  // Actual temperature-sensor library/integration
-  // will be added after the selected sensor is finalized.
-  float temperature = 0.0;
+float readOptical()
+{
 
-  // Display readings
-  Serial.print("Optical: ");
-  Serial.print(optical);
+    int raw =
+        analogRead(
+            OPTICAL_PIN
+        );
 
-  Serial.print(" | Electrical: ");
-  Serial.print(electrical);
 
-  Serial.print(" | Temperature: ");
-  Serial.println(temperature);
+    float voltage =
+        (raw / 4095.0) * 3.3;
 
-  delay(1000);
+
+    return voltage;
+
+}
+
+
+float readElectrical()
+{
+
+    int raw =
+        analogRead(
+            ELECTRICAL_PIN
+        );
+
+
+    float voltage =
+        (raw / 4095.0) * 3.3;
+
+
+    return voltage;
+
+}
+
+
+float readTemperature()
+{
+
+    int raw =
+        analogRead(
+            TEMPERATURE_PIN
+        );
+
+
+    float voltage =
+        (raw / 4095.0) * 3.3;
+
+
+    /*
+       This is currently an analog
+       demonstration conversion.
+
+       Replace this calculation with
+       the correct equation for your
+       actual temperature sensor.
+    */
+
+    float temperature =
+        voltage * 10.0;
+
+
+    return temperature;
+
+}
+
+
+// ============================================================
+// LOOP
+// ============================================================
+
+void loop()
+{
+
+    float optical =
+        readOptical();
+
+
+    float electrical =
+        readElectrical();
+
+
+    float temperature =
+        readTemperature();
+
+
+    // --------------------------------------------------------
+    // Human-readable output
+    // --------------------------------------------------------
+
+    Serial.print(
+        "Optical: "
+    );
+
+    Serial.print(
+        optical,
+        3
+    );
+
+
+    Serial.print(
+        " V"
+    );
+
+
+    Serial.print(
+        " | Electrical: "
+    );
+
+    Serial.print(
+        electrical,
+        3
+    );
+
+
+    Serial.print(
+        " V"
+    );
+
+
+    Serial.print(
+        " | Temperature: "
+    );
+
+    Serial.print(
+        temperature,
+        2
+    );
+
+
+    Serial.println(
+        " C"
+    );
+
+
+    // --------------------------------------------------------
+    // Machine-readable output
+    // --------------------------------------------------------
+
+    Serial.print(
+        "DATA,"
+    );
+
+    Serial.print(
+        optical,
+        3
+    );
+
+    Serial.print(
+        ","
+    );
+
+    Serial.print(
+        electrical,
+        3
+    );
+
+    Serial.print(
+        ","
+    );
+
+    Serial.println(
+        temperature,
+        2
+    );
+
+
+    delay(1000);
+
 }

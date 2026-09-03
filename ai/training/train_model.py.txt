@@ -1,60 +1,376 @@
-import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, classification_report
 import os
+import numpy as np
+import pandas as pd
+import joblib
 
-# Dataset location
-DATASET = "../../../data/sensor_data.csv"
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, classification_report
 
-# Check whether dataset exists
-if not os.path.exists(DATASET):
-    print("Dataset not found.")
-    print("Please place your sensor_data.csv file inside the data folder.")
-    exit()
 
-# Load dataset
-data = pd.read_csv(DATASET)
+# ============================================================
+# PURESense AI MODEL TRAINING
+# ============================================================
 
-# Columns used by the AI
-features = [
-    "optical",
-    "electrical",
-    "temperature"
-]
-
-target = "label"
-
-X = data[features]
-y = data[target]
-
-# Split data into training and testing sets
-X_train, X_test, y_train, y_test = train_test_split(
-    X,
-    y,
-    test_size=0.2,
-    random_state=42,
-    stratify=y
+BASE_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..")
 )
 
-# Create AI model
-model = RandomForestClassifier(
-    n_estimators=100,
-    random_state=42
-)
+DATA_FILE = os.path.join(BASE_DIR, "docs", "sensor_data.csv")
 
-# Train
-model.fit(X_train, y_train)
+MODEL_DIR = os.path.join(BASE_DIR, "ai", "models")
+MODEL_FILE = os.path.join(MODEL_DIR, "puresense_model.pkl")
 
-# Predict
-predictions = model.predict(X_test)
 
-# Evaluate
-accuracy = accuracy_score(y_test, predictions)
+# ============================================================
+# FEATURE DETECTION
+# ============================================================
 
-print("\nPURESense AI Model")
-print("------------------")
-print(f"Accuracy: {accuracy:.2%}")
+FEATURE_ALIASES = {
+    "optical": [
+        "optical",
+        "optical_sensor",
+        "optical_value",
+        "light",
+        "ldr",
+        "absorbance"
+    ],
 
-print("\nClassification Report:")
-print(classification_report(y_test, predictions))
+    "electrical": [
+        "electrical",
+        "electrical_sensor",
+        "electrical_value",
+        "conductivity",
+        "conductivity_sensor",
+        "ec"
+    ],
+
+    "temperature": [
+        "temperature",
+        "temp",
+        "temperature_c",
+        "temp_c"
+    ]
+}
+
+
+def find_column(columns, aliases):
+
+    lower_columns = {
+        str(column).strip().lower(): column
+        for column in columns
+    }
+
+    for alias in aliases:
+
+        if alias.lower() in lower_columns:
+            return lower_columns[alias.lower()]
+
+    return None
+
+
+# ============================================================
+# LOAD DATASET
+# ============================================================
+
+def load_dataset():
+
+    if not os.path.exists(DATA_FILE):
+
+        print("Dataset not found.")
+        print("Creating demonstration dataset...")
+
+        np.random.seed(42)
+
+        samples = 300
+
+        optical = np.random.uniform(0.60, 0.90, samples)
+        electrical = np.random.uniform(1.0, 2.2, samples)
+        temperature = np.random.uniform(22.0, 28.0, samples)
+
+        labels = []
+
+        for o, e, t in zip(
+            optical,
+            electrical,
+            temperature
+        ):
+
+            if (
+                o > 0.68
+                and e < 1.9
+                and 23 <= t <= 27
+            ):
+
+                labels.append("Reference-like")
+
+            elif (
+                o < 0.55
+                or e > 2.4
+            ):
+
+                labels.append("Suspicious")
+
+            else:
+
+                labels.append("Uncertain")
+
+        df = pd.DataFrame({
+            "optical": optical,
+            "electrical": electrical,
+            "temperature": temperature,
+            "label": labels
+        })
+
+        print("Demonstration dataset created.")
+
+        return df
+
+
+    df = pd.read_csv(DATA_FILE)
+
+    print("\nDataset loaded:")
+    print(df.head())
+
+    print("\nColumns:")
+    print(list(df.columns))
+
+    return df
+
+
+# ============================================================
+# PREPARE DATA
+# ============================================================
+
+def prepare_data(df):
+
+    optical_column = find_column(
+        df.columns,
+        FEATURE_ALIASES["optical"]
+    )
+
+    electrical_column = find_column(
+        df.columns,
+        FEATURE_ALIASES["electrical"]
+    )
+
+    temperature_column = find_column(
+        df.columns,
+        FEATURE_ALIASES["temperature"]
+    )
+
+    if not all([
+        optical_column,
+        electrical_column,
+        temperature_column
+    ]):
+
+        raise ValueError(
+            "\nCould not find the required sensor columns.\n\n"
+            "PURESense expects columns similar to:\n"
+            "optical\n"
+            "electrical\n"
+            "temperature\n\n"
+            f"Your columns are:\n{list(df.columns)}"
+        )
+
+
+    # Find label column
+
+    label_column = None
+
+    possible_labels = [
+        "label",
+        "class",
+        "status",
+        "result",
+        "category",
+        "target"
+    ]
+
+    label_column = find_column(
+        df.columns,
+        possible_labels
+    )
+
+
+    if label_column is None:
+
+        raise ValueError(
+            "\nCould not find a label column.\n\n"
+            "Expected something like:\n"
+            "label\n"
+            "class\n"
+            "status\n"
+            "result\n"
+        )
+
+
+    X = df[
+        [
+            optical_column,
+            electrical_column,
+            temperature_column
+        ]
+    ].copy()
+
+
+    X.columns = [
+        "optical",
+        "electrical",
+        "temperature"
+    ]
+
+
+    y = df[label_column].astype(str)
+
+
+    # Remove invalid rows
+
+    X = X.apply(
+        pd.to_numeric,
+        errors="coerce"
+    )
+
+    valid = X.notna().all(axis=1)
+
+    X = X[valid]
+    y = y[valid]
+
+
+    return X, y
+
+
+# ============================================================
+# TRAIN MODEL
+# ============================================================
+
+def train_model():
+
+    df = load_dataset()
+
+    X, y = prepare_data(df)
+
+    print("\nFeatures:")
+    print(X.head())
+
+    print("\nLabels:")
+    print(y.value_counts())
+
+
+    # --------------------------------------------------------
+    # Train/test split
+    # --------------------------------------------------------
+
+    try:
+
+        X_train, X_test, y_train, y_test = train_test_split(
+            X,
+            y,
+            test_size=0.20,
+            random_state=42,
+            stratify=y
+        )
+
+    except ValueError:
+
+        # Fallback if dataset is too small
+        X_train, X_test, y_train, y_test = train_test_split(
+            X,
+            y,
+            test_size=0.20,
+            random_state=42
+        )
+
+
+    # --------------------------------------------------------
+    # Random Forest
+    # --------------------------------------------------------
+
+    model = RandomForestClassifier(
+        n_estimators=150,
+        random_state=42,
+        max_depth=8
+    )
+
+
+    model.fit(
+        X_train,
+        y_train
+    )
+
+
+    # --------------------------------------------------------
+    # Evaluation
+    # --------------------------------------------------------
+
+    predictions = model.predict(X_test)
+
+    accuracy = accuracy_score(
+        y_test,
+        predictions
+    )
+
+
+    print("\n================================")
+    print("PURESense AI MODEL")
+    print("================================")
+
+    print(
+        f"Accuracy: {accuracy * 100:.2f}%"
+    )
+
+    print("\nClassification Report:")
+
+    print(
+        classification_report(
+            y_test,
+            predictions,
+            zero_division=0
+        )
+    )
+
+
+    # --------------------------------------------------------
+    # Save model
+    # --------------------------------------------------------
+
+    os.makedirs(
+        MODEL_DIR,
+        exist_ok=True
+    )
+
+
+    model_package = {
+
+        "model": model,
+
+        "features": [
+            "optical",
+            "electrical",
+            "temperature"
+        ],
+
+        "classes": list(
+            model.classes_
+        )
+    }
+
+
+    joblib.dump(
+        model_package,
+        MODEL_FILE
+    )
+
+
+    print("\nModel saved successfully:")
+    print(MODEL_FILE)
+
+
+# ============================================================
+# MAIN
+# ============================================================
+
+if __name__ == "__main__":
+
+    train_model()

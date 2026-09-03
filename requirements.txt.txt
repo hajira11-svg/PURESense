@@ -1,7 +1,6 @@
-numpy
+Flask
 pandas
-scipy
+numpy
 scikit-learn
-matplotlib
-jupyter
-flask
+joblib
+pyserial
