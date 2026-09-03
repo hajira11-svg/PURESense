@@ -1,6 +1,6 @@
 Flask
-pandas
 numpy
+pandas
 scikit-learn
 joblib
-pyserial
+matplotlib
