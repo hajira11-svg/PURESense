@@ -1,2 +1,2 @@
 # PURESense
-AI-powered multisensor food authenticity screening device combining optical, electrical, and thermal sensing with machine learning.
+PURESense is a portable AI-powered multisensor food authenticity screening platform. The software prototype combines simulated optical, electrical, and temperature sensor data with machine learning to classify samples as Reference-like, Uncertain, or Suspicious. The project demonstrates multisensor data fusion, AI-based classification, model evaluation, and a Flask-based visualization dashboard. The current MVP uses simulated sensor data and is intended as a screening prototype rather than certified laboratory analysis.
