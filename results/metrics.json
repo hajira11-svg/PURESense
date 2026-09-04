@@ -1,0 +1,13 @@
+{
+    "accuracy": 0.9944,
+    "precision_macro": 0.9945,
+    "recall_macro": 0.9944,
+    "f1_macro": 0.9944,
+    "samples": 900,
+    "features": [
+        "optical",
+        "electrical",
+        "temperature"
+    ],
+    "simulation": true
+}

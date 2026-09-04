@@ -1,244 +1,150 @@
 import os
+import json
 import numpy as np
 import pandas as pd
 import joblib
 
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, classification_report
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    confusion_matrix
+)
+
+import matplotlib.pyplot as plt
 
 
 # ============================================================
-# PURESense AI MODEL TRAINING
+# PURESense AI TRAINING
+# Software Simulation Mode
 # ============================================================
 
 BASE_DIR = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..")
 )
 
-DATA_FILE = os.path.join(BASE_DIR, "docs", "sensor_data.csv")
-
 MODEL_DIR = os.path.join(BASE_DIR, "ai", "models")
-MODEL_FILE = os.path.join(MODEL_DIR, "puresense_model.pkl")
+RESULTS_DIR = os.path.join(BASE_DIR, "results")
+
+os.makedirs(MODEL_DIR, exist_ok=True)
+os.makedirs(RESULTS_DIR, exist_ok=True)
+
+MODEL_FILE = os.path.join(
+    MODEL_DIR,
+    "puresense_model.pkl"
+)
+
+DATA_FILE = os.path.join(
+    RESULTS_DIR,
+    "demo_sensor_data.csv"
+)
+
+METRICS_FILE = os.path.join(
+    RESULTS_DIR,
+    "metrics.json"
+)
 
 
 # ============================================================
-# FEATURE DETECTION
+# CREATE SIMULATED MULTISENSOR DATA
 # ============================================================
 
-FEATURE_ALIASES = {
-    "optical": [
-        "optical",
-        "optical_sensor",
-        "optical_value",
-        "light",
-        "ldr",
-        "absorbance"
-    ],
+def create_dataset():
 
-    "electrical": [
-        "electrical",
-        "electrical_sensor",
-        "electrical_value",
-        "conductivity",
-        "conductivity_sensor",
-        "ec"
-    ],
+    np.random.seed(42)
 
-    "temperature": [
-        "temperature",
-        "temp",
-        "temperature_c",
-        "temp_c"
-    ]
-}
+    samples_per_class = 300
 
+    data = []
 
-def find_column(columns, aliases):
+    sample_id = 1
 
-    lower_columns = {
-        str(column).strip().lower(): column
-        for column in columns
-    }
+    # --------------------------------------------------------
+    # REFERENCE-LIKE SAMPLES
+    # --------------------------------------------------------
 
-    for alias in aliases:
+    for _ in range(samples_per_class):
 
-        if alias.lower() in lower_columns:
-            return lower_columns[alias.lower()]
+        optical = np.random.normal(0.75, 0.05)
+        electrical = np.random.normal(1.50, 0.20)
+        temperature = np.random.normal(25.0, 1.2)
 
-    return None
-
-
-# ============================================================
-# LOAD DATASET
-# ============================================================
-
-def load_dataset():
-
-    if not os.path.exists(DATA_FILE):
-
-        print("Dataset not found.")
-        print("Creating demonstration dataset...")
-
-        np.random.seed(42)
-
-        samples = 300
-
-        optical = np.random.uniform(0.60, 0.90, samples)
-        electrical = np.random.uniform(1.0, 2.2, samples)
-        temperature = np.random.uniform(22.0, 28.0, samples)
-
-        labels = []
-
-        for o, e, t in zip(
+        data.append([
+            sample_id,
             optical,
             electrical,
-            temperature
-        ):
+            temperature,
+            "Reference-like"
+        ])
 
-            if (
-                o > 0.68
-                and e < 1.9
-                and 23 <= t <= 27
-            ):
-
-                labels.append("Reference-like")
-
-            elif (
-                o < 0.55
-                or e > 2.4
-            ):
-
-                labels.append("Suspicious")
-
-            else:
-
-                labels.append("Uncertain")
-
-        df = pd.DataFrame({
-            "optical": optical,
-            "electrical": electrical,
-            "temperature": temperature,
-            "label": labels
-        })
-
-        print("Demonstration dataset created.")
-
-        return df
+        sample_id += 1
 
 
-    df = pd.read_csv(DATA_FILE)
+    # --------------------------------------------------------
+    # UNCERTAIN SAMPLES
+    # --------------------------------------------------------
 
-    print("\nDataset loaded:")
-    print(df.head())
+    for _ in range(samples_per_class):
 
-    print("\nColumns:")
-    print(list(df.columns))
+        optical = np.random.normal(0.55, 0.08)
+        electrical = np.random.normal(2.10, 0.30)
+        temperature = np.random.normal(27.0, 1.8)
+
+        data.append([
+            sample_id,
+            optical,
+            electrical,
+            temperature,
+            "Uncertain"
+        ])
+
+        sample_id += 1
+
+
+    # --------------------------------------------------------
+    # SUSPICIOUS SAMPLES
+    # --------------------------------------------------------
+
+    for _ in range(samples_per_class):
+
+        optical = np.random.normal(0.30, 0.07)
+        electrical = np.random.normal(3.00, 0.35)
+        temperature = np.random.normal(29.0, 2.0)
+
+        data.append([
+            sample_id,
+            optical,
+            electrical,
+            temperature,
+            "Suspicious"
+        ])
+
+        sample_id += 1
+
+
+    df = pd.DataFrame(
+        data,
+        columns=[
+            "sample_id",
+            "optical",
+            "electrical",
+            "temperature",
+            "label"
+        ]
+    )
+
+    # Keep simulated sensor values within sensible ranges
+    df["optical"] = df["optical"].clip(0, 1)
+
+    df["electrical"] = df["electrical"].clip(lower=0)
+
+    df["temperature"] = df["temperature"].clip(
+        lower=15,
+        upper=40
+    )
 
     return df
-
-
-# ============================================================
-# PREPARE DATA
-# ============================================================
-
-def prepare_data(df):
-
-    optical_column = find_column(
-        df.columns,
-        FEATURE_ALIASES["optical"]
-    )
-
-    electrical_column = find_column(
-        df.columns,
-        FEATURE_ALIASES["electrical"]
-    )
-
-    temperature_column = find_column(
-        df.columns,
-        FEATURE_ALIASES["temperature"]
-    )
-
-    if not all([
-        optical_column,
-        electrical_column,
-        temperature_column
-    ]):
-
-        raise ValueError(
-            "\nCould not find the required sensor columns.\n\n"
-            "PURESense expects columns similar to:\n"
-            "optical\n"
-            "electrical\n"
-            "temperature\n\n"
-            f"Your columns are:\n{list(df.columns)}"
-        )
-
-
-    # Find label column
-
-    label_column = None
-
-    possible_labels = [
-        "label",
-        "class",
-        "status",
-        "result",
-        "category",
-        "target"
-    ]
-
-    label_column = find_column(
-        df.columns,
-        possible_labels
-    )
-
-
-    if label_column is None:
-
-        raise ValueError(
-            "\nCould not find a label column.\n\n"
-            "Expected something like:\n"
-            "label\n"
-            "class\n"
-            "status\n"
-            "result\n"
-        )
-
-
-    X = df[
-        [
-            optical_column,
-            electrical_column,
-            temperature_column
-        ]
-    ].copy()
-
-
-    X.columns = [
-        "optical",
-        "electrical",
-        "temperature"
-    ]
-
-
-    y = df[label_column].astype(str)
-
-
-    # Remove invalid rows
-
-    X = X.apply(
-        pd.to_numeric,
-        errors="coerce"
-    )
-
-    valid = X.notna().all(axis=1)
-
-    X = X[valid]
-    y = y[valid]
-
-
-    return X, y
 
 
 # ============================================================
@@ -247,52 +153,73 @@ def prepare_data(df):
 
 def train_model():
 
-    df = load_dataset()
+    print()
+    print("=" * 60)
+    print("PURESense AI MODEL TRAINING")
+    print("=" * 60)
 
-    X, y = prepare_data(df)
+    print("\nGenerating simulated multisensor dataset...")
 
-    print("\nFeatures:")
-    print(X.head())
+    df = create_dataset()
 
-    print("\nLabels:")
-    print(y.value_counts())
+    print("\nDataset size:")
+    print(len(df), "samples")
 
-
-    # --------------------------------------------------------
-    # Train/test split
-    # --------------------------------------------------------
-
-    try:
-
-        X_train, X_test, y_train, y_test = train_test_split(
-            X,
-            y,
-            test_size=0.20,
-            random_state=42,
-            stratify=y
-        )
-
-    except ValueError:
-
-        # Fallback if dataset is too small
-        X_train, X_test, y_train, y_test = train_test_split(
-            X,
-            y,
-            test_size=0.20,
-            random_state=42
-        )
+    print("\nClass distribution:")
+    print(df["label"].value_counts())
 
 
-    # --------------------------------------------------------
-    # Random Forest
-    # --------------------------------------------------------
+    # ========================================================
+    # SAVE DATASET
+    # ========================================================
 
-    model = RandomForestClassifier(
-        n_estimators=150,
-        random_state=42,
-        max_depth=8
+    df.to_csv(
+        DATA_FILE,
+        index=False
     )
 
+    print("\nDataset saved to:")
+    print(DATA_FILE)
+
+
+    # ========================================================
+    # FEATURES
+    # ========================================================
+
+    FEATURES = [
+        "optical",
+        "electrical",
+        "temperature"
+    ]
+
+    X = df[FEATURES]
+
+    y = df["label"]
+
+
+    # ========================================================
+    # TRAIN / TEST SPLIT
+    # ========================================================
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X,
+        y,
+        test_size=0.20,
+        random_state=42,
+        stratify=y
+    )
+
+
+    # ========================================================
+    # RANDOM FOREST
+    # ========================================================
+
+    model = RandomForestClassifier(
+        n_estimators=200,
+        max_depth=8,
+        random_state=42,
+        class_weight="balanced"
+    )
 
     model.fit(
         X_train,
@@ -300,24 +227,36 @@ def train_model():
     )
 
 
-    # --------------------------------------------------------
-    # Evaluation
-    # --------------------------------------------------------
+    # ========================================================
+    # PREDICTIONS
+    # ========================================================
 
     predictions = model.predict(X_test)
+
+
+    # ========================================================
+    # MODEL PERFORMANCE
+    # ========================================================
 
     accuracy = accuracy_score(
         y_test,
         predictions
     )
 
+    report = classification_report(
+        y_test,
+        predictions,
+        output_dict=True,
+        zero_division=0
+    )
 
-    print("\n================================")
-    print("PURESense AI MODEL")
-    print("================================")
+    print()
+    print("=" * 60)
+    print("MODEL PERFORMANCE")
+    print("=" * 60)
 
     print(
-        f"Accuracy: {accuracy * 100:.2f}%"
+        f"\nAccuracy: {accuracy * 100:.2f}%"
     )
 
     print("\nClassification Report:")
@@ -331,40 +270,265 @@ def train_model():
     )
 
 
-    # --------------------------------------------------------
-    # Save model
-    # --------------------------------------------------------
+    # ========================================================
+    # SAVE METRICS
+    # ========================================================
 
-    os.makedirs(
-        MODEL_DIR,
-        exist_ok=True
+    metrics = {
+
+        "accuracy": round(
+            float(accuracy),
+            4
+        ),
+
+        "precision_macro": round(
+            float(report["macro avg"]["precision"]),
+            4
+        ),
+
+        "recall_macro": round(
+            float(report["macro avg"]["recall"]),
+            4
+        ),
+
+        "f1_macro": round(
+            float(report["macro avg"]["f1-score"]),
+            4
+        ),
+
+        "samples": len(df),
+
+        "features": FEATURES,
+
+        "simulation": True
+    }
+
+    with open(
+        METRICS_FILE,
+        "w"
+    ) as f:
+
+        json.dump(
+            metrics,
+            f,
+            indent=4
+        )
+
+    print("\nMetrics saved to:")
+    print(METRICS_FILE)
+
+
+    # ========================================================
+    # CONFUSION MATRIX
+    # ========================================================
+
+    labels = [
+        "Reference-like",
+        "Uncertain",
+        "Suspicious"
+    ]
+
+    cm = confusion_matrix(
+        y_test,
+        predictions,
+        labels=labels
     )
 
+    plt.figure(
+        figsize=(7, 6)
+    )
+
+    plt.imshow(cm)
+
+    plt.title(
+        "PURESense AI Confusion Matrix"
+    )
+
+    plt.xlabel(
+        "Predicted Label"
+    )
+
+    plt.ylabel(
+        "Actual Label"
+    )
+
+    plt.xticks(
+        range(len(labels)),
+        labels,
+        rotation=20
+    )
+
+    plt.yticks(
+        range(len(labels)),
+        labels
+    )
+
+    for i in range(len(labels)):
+
+        for j in range(len(labels)):
+
+            plt.text(
+                j,
+                i,
+                cm[i, j],
+                ha="center",
+                va="center"
+            )
+
+    plt.tight_layout()
+
+    plt.savefig(
+        os.path.join(
+            RESULTS_DIR,
+            "confusion_matrix.png"
+        ),
+        dpi=150
+    )
+
+    plt.close()
+
+
+    # ========================================================
+    # FEATURE IMPORTANCE
+    # ========================================================
+
+    importance = model.feature_importances_
+
+    plt.figure(
+        figsize=(7, 5)
+    )
+
+    plt.bar(
+        FEATURES,
+        importance
+    )
+
+    plt.title(
+        "PURESense Feature Importance"
+    )
+
+    plt.xlabel(
+        "Sensor Feature"
+    )
+
+    plt.ylabel(
+        "Importance"
+    )
+
+    plt.tight_layout()
+
+    plt.savefig(
+        os.path.join(
+            RESULTS_DIR,
+            "feature_importance.png"
+        ),
+        dpi=150
+    )
+
+    plt.close()
+
+
+    # ========================================================
+    # MULTISENSOR PROFILE GRAPH
+    # ========================================================
+
+    means = df.groupby(
+        "label"
+    )[FEATURES].mean()
+
+    normalized = means.copy()
+
+    for feature in FEATURES:
+
+        minimum = df[feature].min()
+
+        maximum = df[feature].max()
+
+        normalized[feature] = (
+            means[feature] - minimum
+        ) / (
+            maximum - minimum
+        )
+
+    plt.figure(
+        figsize=(9, 5)
+    )
+
+    for label in labels:
+
+        plt.plot(
+            FEATURES,
+            normalized.loc[label],
+            marker="o",
+            label=label
+        )
+
+    plt.title(
+        "PURESense Multisensor Profiles"
+    )
+
+    plt.xlabel(
+        "Sensor Feature"
+    )
+
+    plt.ylabel(
+        "Normalized Response"
+    )
+
+    plt.ylim(
+        0,
+        1.05
+    )
+
+    plt.legend()
+
+    plt.grid(
+        True,
+        alpha=0.3
+    )
+
+    plt.tight_layout()
+
+    plt.savefig(
+        os.path.join(
+            RESULTS_DIR,
+            "sensor_profiles.png"
+        ),
+        dpi=150
+    )
+
+    plt.close()
+
+
+    # ========================================================
+    # SAVE TRAINED MODEL
+    # ========================================================
 
     model_package = {
 
         "model": model,
 
-        "features": [
-            "optical",
-            "electrical",
-            "temperature"
-        ],
+        "features": FEATURES,
 
         "classes": list(
             model.classes_
-        )
-    }
+        ),
 
+        "simulation": True
+    }
 
     joblib.dump(
         model_package,
         MODEL_FILE
     )
 
-
-    print("\nModel saved successfully:")
+    print("\nModel saved to:")
     print(MODEL_FILE)
+
+    print()
+    print("=" * 60)
+    print("PURESense AI TRAINING COMPLETE")
+    print("=" * 60)
 
 
 # ============================================================

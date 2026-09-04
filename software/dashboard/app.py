@@ -1,11 +1,12 @@
-from flask import Flask, render_template_string, jsonify, request
+from flask import Flask, render_template_string, jsonify
 import os
 import joblib
 import numpy as np
 
 
 # ============================================================
-# PURESense Flask Dashboard
+# PURESense Dashboard
+# Software Simulation Mode
 # ============================================================
 
 app = Flask(__name__)
@@ -32,46 +33,80 @@ MODEL_FILE = os.path.join(
 
 
 # ============================================================
-# LOAD MODEL
+# LOAD AI MODEL
 # ============================================================
 
-model_package = None
+if not os.path.exists(MODEL_FILE):
 
-if os.path.exists(MODEL_FILE):
+    print()
+    print("ERROR: AI model not found.")
+    print()
+    print(
+        "Run this first:"
+    )
+    print(
+        "python ai/training/train_model.py.txt"
+    )
+
+    model_package = None
+
+else:
 
     model_package = joblib.load(
         MODEL_FILE
     )
 
-    print("PURESense AI model loaded.")
-
-else:
-
     print(
-        "WARNING: AI model not found."
-    )
-
-    print(
-        "Run: python ai/training/train_model.py.txt"
+        "PURESense AI model loaded successfully."
     )
 
 
 # ============================================================
-# DEMO SENSOR DATA
+# DEMO SENSOR PROFILES
 # ============================================================
 
-sensor_data = {
+SAMPLES = {
 
-    "optical": 0.73,
+    "reference": {
 
-    "electrical": 1.82,
+        "optical": 0.76,
 
-    "temperature": 24.6
+        "electrical": 1.48,
+
+        "temperature": 25.1
+
+    },
+
+
+    "uncertain": {
+
+        "optical": 0.55,
+
+        "electrical": 2.10,
+
+        "temperature": 27.0
+
+    },
+
+
+    "suspicious": {
+
+        "optical": 0.31,
+
+        "electrical": 3.05,
+
+        "temperature": 29.1
+
+    }
+
 }
 
 
+current_sample = SAMPLES["reference"].copy()
+
+
 # ============================================================
-# AI PREDICTION
+# PREDICTION FUNCTION
 # ============================================================
 
 def predict_sample(
@@ -83,7 +118,7 @@ def predict_sample(
     if model_package is None:
 
         return {
-            "result": "MODEL NOT TRAINED",
+            "result": "MODEL NOT AVAILABLE",
             "confidence": 0
         }
 
@@ -91,7 +126,7 @@ def predict_sample(
     model = model_package["model"]
 
 
-    features = np.array([
+    values = np.array([
         [
             optical,
             electrical,
@@ -101,16 +136,16 @@ def predict_sample(
 
 
     prediction = model.predict(
-        features
+        values
     )[0]
 
 
     probabilities = model.predict_proba(
-        features
+        values
     )[0]
 
 
-    confidence = float(
+    confidence = (
         np.max(probabilities) * 100
     )
 
@@ -125,11 +160,12 @@ def predict_sample(
             confidence,
             1
         )
+
     }
 
 
 # ============================================================
-# DASHBOARD HTML
+# HTML
 # ============================================================
 
 HTML = """
@@ -145,7 +181,7 @@ HTML = """
 <meta name="viewport"
       content="width=device-width, initial-scale=1.0">
 
-<title>PURESense Dashboard</title>
+<title>PURESense</title>
 
 
 <style>
@@ -159,10 +195,7 @@ body {
 
     margin: 0;
 
-    font-family:
-        Arial,
-        Helvetica,
-        sans-serif;
+    font-family: Arial, sans-serif;
 
     background:
         linear-gradient(
@@ -171,33 +204,33 @@ body {
             #ffffff
         );
 
-    color: #1f2937;
+    color: #172033;
 }
 
 
 .header {
 
-    padding: 30px;
-
-    text-align: center;
-
     background: #111827;
 
     color: white;
+
+    padding: 35px;
+
+    text-align: center;
 }
 
 
 .header h1 {
 
-    margin: 0;
+    font-size: 44px;
 
-    font-size: 42px;
+    margin: 0;
 }
 
 
 .header p {
 
-    margin-top: 8px;
+    margin: 10px 0 0;
 
     font-size: 18px;
 
@@ -215,13 +248,33 @@ body {
 }
 
 
-.section-title {
+.notice {
 
-    margin-top: 30px;
+    background: #fff7ed;
+
+    border: 1px solid #fed7aa;
+
+    padding: 15px;
+
+    border-radius: 12px;
+
+    text-align: center;
+
+    margin-bottom: 25px;
+
+    color: #9a3412;
+}
+
+
+.section {
+
+    margin-top: 25px;
+}
+
+
+.section h2 {
 
     margin-bottom: 18px;
-
-    font-size: 24px;
 }
 
 
@@ -230,10 +283,7 @@ body {
     display: grid;
 
     grid-template-columns:
-        repeat(
-            3,
-            1fr
-        );
+        repeat(3, 1fr);
 
     gap: 20px;
 }
@@ -251,38 +301,25 @@ body {
 
     box-shadow:
         0 8px 25px
-        rgba(
-            0,
-            0,
-            0,
-            0.08
-        );
+        rgba(0,0,0,0.08);
 }
 
 
 .card h3 {
 
-    margin-top: 0;
+    color: #6b7280;
 
-    color: #4b5563;
+    margin-top: 0;
 }
 
 
 .value {
 
-    font-size: 34px;
+    font-size: 36px;
 
     font-weight: bold;
 
-    margin-top: 15px;
-}
-
-
-.unit {
-
-    color: #6b7280;
-
-    font-size: 14px;
+    margin: 15px 0;
 }
 
 
@@ -290,60 +327,47 @@ body {
 
     margin-top: 30px;
 
+    background: white;
+
     padding: 35px;
 
     border-radius: 20px;
 
     text-align: center;
 
-    background: white;
-
     box-shadow:
         0 8px 25px
-        rgba(
-            0,
-            0,
-            0,
-            0.08
-        );
+        rgba(0,0,0,0.08);
 }
 
 
 .result {
 
-    font-size: 34px;
+    font-size: 36px;
 
     font-weight: bold;
 
-    margin: 15px;
+    margin: 20px;
 }
 
 
 .confidence {
 
-    font-size: 20px;
+    font-size: 21px;
 
     color: #4b5563;
 }
 
 
-.info {
-
-    margin-top: 25px;
-
-    padding: 20px;
-
-    background: #f9fafb;
-
-    border-radius: 12px;
-
-    line-height: 1.6;
-}
-
-
 .buttons {
 
-    text-align: center;
+    display: flex;
+
+    justify-content: center;
+
+    gap: 15px;
+
+    flex-wrap: wrap;
 
     margin-top: 30px;
 }
@@ -361,7 +385,7 @@ button {
 
     color: white;
 
-    font-size: 16px;
+    font-size: 15px;
 
     cursor: pointer;
 }
@@ -373,11 +397,25 @@ button:hover {
 }
 
 
+.explanation {
+
+    margin-top: 25px;
+
+    background: #f9fafb;
+
+    padding: 20px;
+
+    border-radius: 12px;
+
+    line-height: 1.6;
+}
+
+
 .footer {
 
     text-align: center;
 
-    margin: 40px;
+    padding: 35px;
 
     color: #6b7280;
 
@@ -389,13 +427,8 @@ button:hover {
 
     .cards {
 
-        grid-template-columns:
-            1fr;
-    }
+        grid-template-columns: 1fr;
 
-    .header h1 {
-
-        font-size: 32px;
     }
 
 }
@@ -414,7 +447,7 @@ button:hover {
 
     <p>
         Portable AI-Powered
-        Food Authenticity Screening System
+        Food Authenticity Screening
     </p>
 
 </div>
@@ -423,91 +456,99 @@ button:hover {
 <div class="container">
 
 
-<h2 class="section-title">
-    Sensor Measurements
-</h2>
+<div class="notice">
 
-
-<div class="cards">
-
-
-<div class="card">
-
-    <h3>Optical Sensor</h3>
-
-    <div
-        class="value"
-        id="optical"
-    >
-        {{ optical }}
-    </div>
-
-    <div class="unit">
-        Optical response
-    </div>
+    SOFTWARE DEMONSTRATION MODE —
+    Sensor readings are simulated for
+    prototype demonstration.
 
 </div>
 
 
-<div class="card">
+<div class="section">
 
-    <h3>Electrical Sensor</h3>
+    <h2>Multisensor Measurements</h2>
 
-    <div
-        class="value"
-        id="electrical"
-    >
-        {{ electrical }}
+
+    <div class="cards">
+
+
+        <div class="card">
+
+            <h3>Optical Sensor</h3>
+
+            <div
+                class="value"
+                id="optical"
+            >
+                {{ optical }}
+            </div>
+
+            <div>
+                Optical response
+            </div>
+
+        </div>
+
+
+        <div class="card">
+
+            <h3>Electrical Sensor</h3>
+
+            <div
+                class="value"
+                id="electrical"
+            >
+                {{ electrical }}
+            </div>
+
+            <div>
+                Electrical response
+            </div>
+
+        </div>
+
+
+        <div class="card">
+
+            <h3>Temperature</h3>
+
+            <div
+                class="value"
+                id="temperature"
+            >
+                {{ temperature }} °C
+            </div>
+
+            <div>
+                Sample temperature
+            </div>
+
+        </div>
+
+
     </div>
-
-    <div class="unit">
-        Electrical response
-    </div>
-
-</div>
-
-
-<div class="card">
-
-    <h3>Temperature</h3>
-
-    <div
-        class="value"
-        id="temperature"
-    >
-        {{ temperature }} °C
-    </div>
-
-    <div class="unit">
-        Sample temperature
-    </div>
-
-</div>
-
 
 </div>
 
 
 <div class="result-box">
 
-    <h2>
-        AI SCREENING RESULT
-    </h2>
+    <h2>AI SCREENING RESULT</h2>
 
 
     <div
         class="result"
         id="result"
     >
-
         {{ result }}
-
     </div>
 
 
     <div class="confidence">
 
         Confidence:
+
         <strong id="confidence">
             {{ confidence }}%
         </strong>
@@ -515,43 +556,60 @@ button:hover {
     </div>
 
 
-    <div class="info">
+    <div class="explanation">
 
-        PURESense combines
-        optical, electrical and
-        thermal measurements
-        using machine learning
-        for rapid preliminary
-        food authenticity screening.
+        PURESense combines multiple
+        sensing modalities and applies
+        machine learning to identify
+        patterns in the measured
+        sample.
+
+        <br><br>
+
+        The software prototype provides
+        preliminary screening categories:
+        <strong>
+            Reference-like,
+            Uncertain,
+            and Suspicious.
+        </strong>
 
     </div>
+
 
 </div>
 
 
 <div class="buttons">
 
-    <button
-        onclick="runPrediction()"
-    >
-
-        Run AI Screening
-
+    <button onclick="loadSample('reference')">
+        Reference Sample
     </button>
+
+
+    <button onclick="loadSample('uncertain')">
+        Uncertain Sample
+    </button>
+
+
+    <button onclick="loadSample('suspicious')">
+        Suspicious Sample
+    </button>
+
+</div>
+
 
 </div>
 
 
 <div class="footer">
 
-    PURESense Prototype<br>
+    PURESense Software Prototype
 
-    Screening result is not a
-    substitute for certified
-    laboratory analysis.
+    <br><br>
 
-</div>
-
+    Screening output is not a substitute
+    for certified laboratory analysis.
 
 </div>
 
@@ -559,51 +617,12 @@ button:hover {
 <script>
 
 
-async function runPrediction() {
+async function loadSample(type) {
+
 
     const response =
         await fetch(
-            "/api/predict",
-            {
-                method: "POST",
-
-                headers: {
-                    "Content-Type":
-                        "application/json"
-                },
-
-                body: JSON.stringify({
-
-                    optical:
-                        parseFloat(
-                            document
-                            .getElementById(
-                                "optical"
-                            )
-                            .innerText
-                        ),
-
-                    electrical:
-                        parseFloat(
-                            document
-                            .getElementById(
-                                "electrical"
-                            )
-                            .innerText
-                        ),
-
-                    temperature:
-                        parseFloat(
-                            document
-                            .getElementById(
-                                "temperature"
-                            )
-                            .innerText
-                        )
-
-                })
-
-            }
+            "/api/sample/" + type
         );
 
 
@@ -612,17 +631,31 @@ async function runPrediction() {
 
 
     document
-        .getElementById(
-            "result"
-        )
+        .getElementById("optical")
+        .innerText =
+        data.optical;
+
+
+    document
+        .getElementById("electrical")
+        .innerText =
+        data.electrical;
+
+
+    document
+        .getElementById("temperature")
+        .innerText =
+        data.temperature + " °C";
+
+
+    document
+        .getElementById("result")
         .innerText =
         data.result;
 
 
     document
-        .getElementById(
-            "confidence"
-        )
+        .getElementById("confidence")
         .innerText =
         data.confidence + "%";
 
@@ -640,7 +673,7 @@ async function runPrediction() {
 
 
 # ============================================================
-# MAIN DASHBOARD ROUTE
+# DASHBOARD ROUTE
 # ============================================================
 
 @app.route("/")
@@ -648,11 +681,11 @@ def dashboard():
 
     prediction = predict_sample(
 
-        sensor_data["optical"],
+        current_sample["optical"],
 
-        sensor_data["electrical"],
+        current_sample["electrical"],
 
-        sensor_data["temperature"]
+        current_sample["temperature"]
 
     )
 
@@ -661,11 +694,11 @@ def dashboard():
 
         HTML,
 
-        optical=sensor_data["optical"],
+        optical=current_sample["optical"],
 
-        electrical=sensor_data["electrical"],
+        electrical=current_sample["electrical"],
 
-        temperature=sensor_data["temperature"],
+        temperature=current_sample["temperature"],
 
         result=prediction["result"],
 
@@ -675,59 +708,63 @@ def dashboard():
 
 
 # ============================================================
-# AI API
+# SAMPLE API
 # ============================================================
 
 @app.route(
-    "/api/predict",
-    methods=["POST"]
+    "/api/sample/<sample_type>"
 )
+def sample(sample_type):
 
-def api_predict():
-
-    data = request.get_json()
-
-
-    optical = float(
-        data.get(
-            "optical",
-            sensor_data["optical"]
-        )
-    )
+    global current_sample
 
 
-    electrical = float(
-        data.get(
-            "electrical",
-            sensor_data["electrical"]
-        )
-    )
+    if sample_type not in SAMPLES:
+
+        return jsonify({
+            "error":
+            "Unknown sample"
+        }), 400
 
 
-    temperature = float(
-        data.get(
-            "temperature",
-            sensor_data["temperature"]
-        )
-    )
+    current_sample = SAMPLES[
+        sample_type
+    ].copy()
 
 
-    result = predict_sample(
+    prediction = predict_sample(
 
-        optical,
+        current_sample["optical"],
 
-        electrical,
+        current_sample["electrical"],
 
-        temperature
+        current_sample["temperature"]
 
     )
 
 
-    return jsonify(result)
+    return jsonify({
+
+        "optical":
+            current_sample["optical"],
+
+        "electrical":
+            current_sample["electrical"],
+
+        "temperature":
+            current_sample["temperature"],
+
+        "result":
+            prediction["result"],
+
+        "confidence":
+            prediction["confidence"]
+
+    })
 
 
 # ============================================================
-# RUN SERVER
+# RUN
 # ============================================================
 
 if __name__ == "__main__":

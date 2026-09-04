@@ -1,0 +1,4 @@
+sample,optical,electrical,temperature,result
+Reference Sample,0.76,1.48,25.1,Reference-like
+Uncertain Sample,0.55,2.10,27.0,Uncertain
+Suspicious Sample,0.31,3.05,29.1,Suspicious

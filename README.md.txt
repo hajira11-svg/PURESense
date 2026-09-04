@@ -9,11 +9,12 @@ The system combines **optical, electrical, and thermal sensing** with signal pro
 
 Instead of relying on a single sensor threshold, PURESense combines complementary measurements and evaluates whether a new sample resembles the learned reference population.
 
-**PURESense is designed to screen, not certify.** A suspicious or uncertain result should be followed by laboratory verification.
+> **PURESense is designed to screen, not certify.**
+> A suspicious or uncertain result should be followed by laboratory verification.
 
 ---
 
-## 1. Problem
+# 1. Problem
 
 Food can look normal even when its physical or chemical characteristics differ from an expected reference.
 
@@ -29,3 +30,50 @@ Laboratory Testing
 Waiting / Analysis
        ↓
 Verified Result
+                   FOOD SAMPLE
+                      │
+                      ▼
+              ┌───────────────┐
+              │    SENSORS    │
+              └───────┬───────┘
+                      │
+          ┌───────────┼───────────┐
+          ▼           ▼           ▼
+       Optical    Electrical   Thermal
+          │           │           │
+          └───────────┼───────────┘
+                      ▼
+              Sensor Fingerprint
+                      │
+                      ▼
+              Machine Learning
+                      │
+                      ▼
+              Screening Result
+                      │
+                      ▼
+                 Dashboard
+
+                                  FOOD SAMPLE
+                      │
+                      ▼
+              LOW-COST SENSORS
+                      │
+                      ▼
+              PHYSICAL RESPONSE
+                      │
+                      ▼
+             SENSOR FINGERPRINT
+                      │
+                      ▼
+             ARTIFICIAL INTELLIGENCE
+                      │
+                      ▼
+          RAPID PRELIMINARY SCREENING
+                      │
+          ┌───────────┼───────────┐
+          ▼           ▼           ▼
+     REFERENCE      UNCERTAIN   SUSPICIOUS
+                                  │
+                                  ▼
+                       LABORATORY VERIFICATION
